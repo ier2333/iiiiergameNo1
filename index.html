@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的赛博冒险</title>
+    <style>
+        /* --- 简单的 CSS 样式，负责好不好看 --- */
+        body {
+            background-color: #0d0d0d;
+            color: #00ff41; /* 赛博绿 */
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .game-container {
+            width: 100%;
+            max-width: 600px;
+            background: #1a1a1a;
+            border: 2px solid #00ff41;
+            padding: 20px;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+        }
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+        .scene-image {
+            width: 100%;
+            height: 250px;
+            background-color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            color: #555;
+            border: 1px dashed #555;
+        }
+        /* 如果你有真的图片，这个样式会让图片适应屏幕 */
+        .scene-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .story-text {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            min-height: 80px;
+        }
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        button {
+            background: transparent;
+            border: 1px solid #00ff41;
+            color: #00ff41;
+            padding: 15px;
+            font-size: 16px;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: #00ff41;
+            color: #000;
+        }
+        button:disabled {
+            border-color: #555;
+            color: #555;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <div class="status-bar">
+        <span id="stat-hp">❤️ 生命: 100</span>
+        <span id="stat-san">🧠 精神: 100</span>
+    </div>
+
+    <div class="scene-image" id="scene-img">
+        [ 图片区域 ]
+    </div>
+
+    <div class="story-text" id="story-text">
+        剧情加载中...
+    </div>
+
+    <div class="btn-group" id="choices-area">
+        </div>
+</div>
+
+<script>
+    /* --- 游戏数据区 (Bro, 你主要改这里!) --- */
+    
+    // 玩家初始状态
+    let playerState = {
+        hp: 100,
+        san: 100
+    };
+
+    // 剧本配置 (JSON格式)
+    const storyNodes = {
+        "start": {
+            "text": "你醒来时，周围是一片废墟。空气中弥漫着酸雨的味道。你的头很痛，口袋里只剩下一块压缩饼干。",
+            "image": "https://placehold.co/600x400/1a1a1a/00ff41?text=Ruins", // 这里的链接以后换成你自己的图片文件
+            "choices": [
+                { 
+                    "text": "吃掉饼干，补充体力", 
+                    "effect": { "hp": 10, "san": 5 },
+                    "nextNode": "eat_cookie" 
+                },
+                { 
+                    "text": "留着饼干，先观察四周", 
+                    "effect": { "san": -5 },
+                    "nextNode": "look_around" 
+                }
+            ]
+        },
+        "eat_cookie": {
+            "text": "饼干干涩难咽，但你感觉到体力恢复了一些。你决定继续前进，前方有两条路。",
+            "image": "https://placehold.co/600x400/1a1a1a/00ff41?text=Cookie",
+            "choices": [
+                { 
+                    "text": "走向发光的城市废墟", 
+                    "nextNode": "city_ruins" 
+                },
+                { 
+                    "text": "走进黑暗的森林", 
+                    "nextNode": "dark_forest" 
+                }
+            ]
+        },
+        "look_around": {
+            "text": "你忍着饥饿观察四周。突然，废墟后面传来一声低吼，一只机械野狗正在盯着你！",
+            "image": "https://placehold.co/600x400/1a1a1a/00ff41?text=Danger",
+            "choices": [
+                { 
+                    "text": "逃跑！", 
+                    "effect": { "hp": -20, "san": -10 },
+                    "nextNode": "run_away" 
+                },
+                { 
+                    "text": "捡起石头战斗", 
+                    "effect": { "hp": -50 },
+                    "nextNode": "fight" 
+                }
+            ]
+        },
+        // --- 结局节点 ---
+        "city_ruins": {
+            "text": "【结局】你走进了城市废墟，发现这里其实是赛博徒步的终点。你活下来了。",
+            "image": "https://placehold.co/600x400/1a1a1a/00ff41?text=Victory",
+            "choices": [
+                { "text": "重新开始", "nextNode": "start", "reset": true }
+            ]
+        },
+        "dark_forest": {
+            "text": "【结局】森林里充满了辐射，你倒在了半路上...",
+            "image": "https://placehold.co/600x400/1a1a1a/00ff41?text=Game+Over",
+            "choices": [
+                { "text": "重新开始", "nextNode": "start", "reset": true }
+            ]
+        },
+        "run_away": {
+            "text": "【结局】你慌不择路，摔下了悬崖...",
+            "image": "https://placehold.co/600x400/1a1a1a/00ff41?text=Game+Over",
+            "choices": [
+                { "text": "重新开始", "nextNode": "start", "reset": true }
+            ]
+        },
+        "fight": {
+            "text": "【结局】虽然你击退了野狗，但伤势过重，无法继续前行。",
+            "image": "https://placehold.co/600x400/1a1a1a/00ff41?text=Game+Over",
+            "choices": [
+                { "text": "重新开始", "nextNode": "start", "reset": true }
+            ]
+        }
+    };
+
+    /* --- 游戏逻辑区 (Bro, 这部分不用动) --- */
+    function renderNode(nodeId) {
+        const node = storyNodes[nodeId];
+        if (!node) {
+            console.error("找不到节点:", nodeId);
+            return;
+        }
+
+        // 更新文本
+        document.getElementById("story-text").innerText = node.text;
+
+        // 更新图片 (如果有)
+        const imgDiv = document.getElementById("scene-img");
+        if (node.image) {
+            imgDiv.innerHTML = `<img src="${node.image}" alt="scene">`;
+        } else {
+            imgDiv.innerHTML = `[ 暂无图片 ]`;
+        }
+
+        // 更新按钮
+        const choicesArea = document.getElementById("choices-area");
+        choicesArea.innerHTML = ""; // 清空旧按钮
+
+        node.choices.forEach(choice => {
+            const btn = document.createElement("button");
+            // 显示代价提示
+            let costText = "";
+            if (choice.effect) {
+                if (choice.effect.hp) costText += ` (生命 ${choice.effect.hp > 0 ? '+' : ''}${choice.effect.hp})`;
+                if (choice.effect.san) costText += ` (精神 ${choice.effect.san > 0 ? '+' : ''}${choice.effect.san})`;
+            }
+            btn.innerText = choice.text + costText;
+            
+            btn.onclick = () => {
+                // 1. 结算数值
+                if (choice.effect) {
+                    if (choice.effect.hp) playerState.hp += choice.effect.hp;
+                    if (choice.effect.san) playerState.san += choice.effect.san;
+                }
+                
+                // 限制数值范围
+                if (playerState.hp > 100) playerState.hp = 100;
+                if (playerState.san > 100) playerState.san = 100;
+
+                updateStatus();
+
+                // 2. 检查死亡
+                if (playerState.hp <= 0) {
+                    alert("你因为生命耗尽而倒下了...");
+                    location.reload();
+                    return;
+                }
+
+                // 3. 检查重置
+                if (choice.reset) {
+                    playerState.hp = 100;
+                    playerState.san = 100;
+                    updateStatus();
+                }
+
+                // 4. 跳转
+                renderNode(choice.nextNode);
+            };
+            choicesArea.appendChild(btn);
+        });
+    }
+
+    function updateStatus() {
+        document.getElementById("stat-hp").innerText = `❤️ 生命: ${playerState.hp}`;
+        document.getElementById("stat-san").innerText = `🧠 精神: ${playerState.san}`;
+    }
+
+    // 游戏开始
+    updateStatus();
+    renderNode("start");
+
+</script>
+</body>
+</html>
